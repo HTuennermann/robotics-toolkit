@@ -3,15 +3,15 @@ from numpy import pi
 import random
 from particle_testbot import *
 
-
-def move_particles(particles, turn, turn_noise, forward, forward_noise):
+# move and predict depend on the actual robot dynamics so these should be changed together with the robot
+def move_particles(particles, turn, turn_noise, forward, forward_noise, world_size):
     dist = forward + np.random.normal(0.0, forward_noise, len(particles[0]))
     particles[0] = (particles[0] + turn + np.random.normal(0.0, turn_noise, len(particles[0]))) % (2 * pi)
     particles[1] = (particles[1] + (np.cos(particles[0]) * dist)) % world_size
     particles[2] = (particles[2] + (np.sin(particles[0]) * dist)) % world_size
 
-
-def measurement_prob(particles, measurement, m_noise):
+# move and predict depend on the actual robot dynamics so these should be changed together with the robot
+def measurement_prob(particles, measurement, m_noise, landmarks):
 
     prob = np.ones(len(particles[1]))
 
@@ -22,22 +22,24 @@ def measurement_prob(particles, measurement, m_noise):
     return prob
 
 class ParticleFilter:
-    def __init__(self, grid, noise, n):
+    def __init__(self, grid, noise, n, world_size, landmarks):
         self.noise = noise
+        self.landmarks = landmarks
+        self.world_size = world_size
         self.N = n
         self.w = np.zeros(self.N)
-        self.particles = np.array([np.random.random(N)*g for g in grid])
+        self.particles = np.array([np.random.random(n)*g for g in grid])
 
     def move_particles(self, turn, forward):
-        move_particles(self.particles, turn, self.noise[1], forward, self.noise[0])
+        move_particles(self.particles, turn, self.noise[1], forward, self.noise[0], self.world_size)
 
-    def calculate_probabilites(self, sensor_data):
-        self.w = measurement_prob(self.particles, sensor_data, self.noise[2])
+    def calculate_probabilities(self, sensor_data):
+        self.w = measurement_prob(self.particles, sensor_data, self.noise[2], self.landmarks)
 
     def resample_particles(self):
 
         mw = np.max(self.w)
-        index = int(random.random() * N)
+        index = int(random.random() * self.N)
         beta = 0.0
         particles_temp = self.particles.copy()
 
@@ -45,37 +47,17 @@ class ParticleFilter:
             beta += random.random() * 2.0 * mw
             while beta > self.w[index]:
                 beta -= self.w[index]
-                index = (index + 1) % N
+                index = (index + 1) % self.N
             self.particles[:, i] = particles_temp[:, index]
 
 
-def eval(r, p):
+def eval_particle_filter(r, p, world_size):
     dx = (p[1] - r.x + (world_size / 2.0)) % world_size - (world_size / 2.0)
     dy = (p[2] - r.y + (world_size / 2.0)) % world_size - (world_size / 2.0)
     err = np.sqrt(dx * dx + dy * dy)
     return sum(err)/len(err)
 
-landmarks = [[20.0, 20.0], [80.0, 80.0], [20.0, 80.0], [80.0, 20.0]]
-world_size = 100.0
-myrobot = Robot(world_size, landmarks)
 
-N = 1000
-T = 100
-
-f_noise, t_noise, s_noise = 0.05, 0.05, 5
-turn, forward = 0.1, 5.0
-
-filter = ParticleFilter([2*np.pi, world_size, world_size], [f_noise, t_noise, s_noise], N)
-
-for t in range(T):
-
-    myrobot = myrobot.move(turn, forward)
-    sensor_data = myrobot.sense()
-
-    filter.move_particles(turn, forward)
-    filter.calculate_probabilites(sensor_data)
-    filter.resample_particles()
-    print eval(myrobot, filter.particles)
 
 
 

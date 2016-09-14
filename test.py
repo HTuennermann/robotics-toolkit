@@ -1,6 +1,7 @@
 import unittest
 from localization import *
 from kalman import *
+from particle import *
 import numpy as np
 
 
@@ -100,6 +101,32 @@ class RoboticsTests(unittest.TestCase):
 
         self.assertTrue(np.all(np.isclose(x, x_result)))
         self.assertTrue(np.all(np.isclose(P, P_result)))
+
+    def test_particle_filter(self):
+        landmarks = [[20.0, 20.0], [80.0, 80.0], [20.0, 80.0], [80.0, 20.0]]
+        world_size = 100.0
+        myrobot = Robot(world_size, landmarks)
+
+        f_noise, t_noise, s_noise = 0.05, 0.05, 5
+        turn, forward = 0.1, 5.0
+
+        N = 1000
+        particle_filter = ParticleFilter([2 * np.pi, world_size, world_size],
+                                         [f_noise, t_noise, s_noise], N, world_size, landmarks)
+
+        T = 100
+        for t in range(T):
+            myrobot = myrobot.move(turn, forward)
+            sensor_data = myrobot.sense()
+
+            particle_filter.move_particles(turn, forward)
+            particle_filter.calculate_probabilities(sensor_data)
+            particle_filter.resample_particles()
+            #print eval_particle_filter(myrobot, particle_filter.particles, world_size)
+
+        assert(abs(myrobot.orientation - particle_filter.particles[0].mean()) < 0.4)
+        assert(abs(myrobot.x - particle_filter.particles[1].mean()) < 0.4)
+        assert(abs(myrobot.y - particle_filter.particles[2].mean()) < 0.4)
 
 
 if __name__ == '__main__':
